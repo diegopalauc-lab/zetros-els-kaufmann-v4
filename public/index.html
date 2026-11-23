@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zetros ELS-Kaufmann</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header><div class="wrap header">
+    <div><div class="project">RETROFIT CTZ15</div><h1>Zetros ELS-Kaufmann</h1></div>
+    <div class="header-side">
+      <div class="brands" aria-label="Organizaciones">
+        <img class="logo-els" src="/logo-els.png" alt="ELS" width="272" height="79">
+        <img class="logo-kaufmann" src="/logo-kaufmann.png" alt="Grupo Kaufmann" width="721" height="306">
+      </div>
+      <div id="session" hidden><span id="username"></span><button id="logout" class="ghost">Salir</button></div>
+    </div>
+  </div></header>
+  <main class="wrap">
+    <p id="notice" role="status"></p>
+    <section id="login" class="panel narrow" hidden>
+      <h2>Acceso al equipo</h2>
+      <p id="link-required">Abre el enlace compartido por el equipo para entrar al tablero.</p>
+      <form id="login-form" hidden>
+        <label>Tu nombre<input name="name" autocomplete="name" maxlength="80" required></label>
+        <p class="caption">Tu nombre aparecerá junto a tus aportes en el historial.</p>
+        <button>Entrar al tablero</button>
+      </form>
+    </section>
+    <section id="board" hidden aria-label="Tablero de revisión">
+      <div class="overview">
+        <div><h2>Puntos de revisión</h2><p id="progress-label"></p></div>
+        <progress id="progress" aria-label="Avance total"></progress>
+      </div>
+      <div class="filters panel">
+        <label>Buscar<input id="search" type="search" placeholder="Número, descripción o categoría"></label>
+        <label>Estado<select id="filter-status"><option value="">Todos</option><option value="open">Pendientes</option><option value="done">Solucionados</option></select></label>
+        <label>Responsable<select id="filter-owner"><option value="">Todos</option><option value="unassigned">Sin asignar</option></select></label>
+      </div>
+      <div id="items"></div>
+    </section>
+  </main>
+  <dialog id="detail" aria-labelledby="detail-title">
+    <div class="dialog-head"><div><div id="detail-meta" class="caption"></div><h2 id="detail-title">Punto de revisión</h2></div><button id="close-detail" class="ghost">Cerrar</button></div>
+    <div class="dialog-body">
+      <p id="description"></p>
+      <div class="controls">
+        <label>Responsable<select id="owner"></select></label>
+        <label class="check"><input id="solved" type="checkbox"> Solucionado</label>
+      </div>
+      <h3>Fotos de referencia</h3><div id="references" class="gallery"></div>
+      <h3>Registrar avance</h3>
+      <p id="detail-notice" role="status"></p>
+      <form id="comment-form">
+        <label>Comentario<textarea id="comment" rows="3" maxlength="2000" required></textarea></label>
+        <button>Publicar comentario</button>
+      </form>
+      <form id="photo-form">
+        <label>Fotos adicionales<input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>
+        <p class="caption">JPG, PNG o WebP. Las fotos se comprimen al subirlas.</p>
+        <button>Subir fotos</button>
+      </form>
+      <h3>Historial del punto</h3><div id="history"></div>
+    </div>
+  </dialog>
+</body>
+</html>
