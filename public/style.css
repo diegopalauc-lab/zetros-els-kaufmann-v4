@@ -75,3 +75,14 @@ dialog::backdrop { background: #091522b5; }
   .row .status { justify-self: end; }
   .dialog-body, .dialog-head { padding-inline: 14px; }
 }
+
+.vehicle-selector { display: grid; gap: 5px; max-width: 360px; margin-top: 24px; padding: 12px; }
+.progress-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.progress-card { padding: 14px; }
+.progress-card h3 { margin: 0 0 6px; }
+.progress-card .progress-value { color: var(--muted); margin: 0 0 8px; font-weight: 650; }
+.progress-card progress { display: block; width: 100%; }
+#vehicle-status { margin-bottom: 16px; }
+@media (max-width: 480px) {
+  .progress-grid { grid-template-columns: 1fr; }
+}

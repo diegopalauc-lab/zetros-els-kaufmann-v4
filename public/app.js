@@ -6,10 +6,12 @@ const board = byId("board");
 const detail = byId("detail");
 const owner = byId("owner");
 const solved = byId("solved");
+const vinSelect = byId("vin");
 
 const loginForm = byId("login-form");
 let accessKey = new URLSearchParams(location.hash.slice(1)).get("acceso");
 let snapshot;
+let chosenVin = "";
 let activeItem;
 let activityKey = "";
 let boardKey = "";
@@ -52,6 +54,8 @@ function showLogin() {
   loginForm.hidden = !accessKey;
   byId("link-required").hidden = Boolean(accessKey);
   snapshot = undefined;
+  chosenVin = "";
+  vinSelect.value = "";
   boardKey = "";
   byId("items").replaceChildren();
   byId("references").replaceChildren();
@@ -72,19 +76,45 @@ function normalize(value) {
   return value.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
 }
 
+const percent = new Intl.NumberFormat("es-CL", {
+  style: "percent", maximumFractionDigits: 2,
+});
+const number = new Intl.NumberFormat("es-CL");
+
+function showProgress(progressId, labelId, solved, total) {
+  const bar = byId(progressId);
+  bar.hidden = false;
+  bar.max = total;
+  bar.value = solved;
+  byId(labelId).textContent = `${percent.format(solved / total)} · ${number.format(solved)} de ${number.format(total)} resueltos`;
+}
+
 function renderBoard() {
   if (!snapshot) return;
-  const {items, states} = snapshot;
+  const {items, states, vehicles, vin, fleetSolved} = snapshot;
+  showProgress("fleet-progress", "fleet-label", fleetSolved, items.length * vehicles.length);
+  const ready = Boolean(vin && vin === chosenVin);
+  byId("filters").hidden = !ready;
+  byId("vehicle-status").hidden = ready;
+  if (!ready) {
+    byId("progress").hidden = true;
+    byId("progress-label").textContent = chosenVin ? "Cargando avance…" : "Selecciona un VIN";
+    byId("vehicle-status").textContent = chosenVin
+      ? "Cargando puntos del vehículo…"
+      : "Selecciona un VIN para ver sus puntos de revisión.";
+    byId("items").replaceChildren();
+    boardKey = "";
+    return;
+  }
+
   const count = Object.values(states).filter((item) => item.solved).length;
-  byId("progress").max = items.length;
-  byId("progress").value = count;
-  byId("progress-label").textContent = `${count} de ${items.length} solucionados · ${items.length - count} pendientes`;
+  showProgress("progress", "progress-label", count, items.length);
 
   const query = normalize(byId("search").value.trim());
   const statusFilter = byId("filter-status").value;
   const ownerFilter = byId("filter-owner").value;
   const list = byId("items");
-  const key = JSON.stringify([items, states, query, statusFilter, ownerFilter]);
+  const key = JSON.stringify([vin, states, query, statusFilter, ownerFilter]);
   if (key === boardKey) return;
   boardKey = key;
 
@@ -135,10 +165,10 @@ function photoLink(url, alt) {
 }
 
 function activityPath(item, action) {
-  return `/api/${item.id}/${action}`;
+  return `/api/${item.id}/${action}?vin=${encodeURIComponent(item.vin)}`;
 }
 
-function renderActivity(events) {
+function renderActivity(events, vin) {
   const key = JSON.stringify(events);
   if (key === activityKey) return;
   activityKey = key;
@@ -150,7 +180,7 @@ function renderActivity(events) {
     const date = new Date(event.time).toLocaleString("es-CL", {dateStyle: "short", timeStyle: "short"});
     entry.append(element("div", `${event.author} · ${date}`, "caption"));
     if (event.kind === "photo") {
-      entry.append(photoLink(`/photos/${event.id}`, `Foto de avance de ${event.author}`));
+      entry.append(photoLink(`/photos/${event.id}?vin=${encodeURIComponent(vin)}`, `Foto de avance de ${event.author}`));
     } else {
       entry.append(element("p", event.body));
     }
@@ -159,7 +189,7 @@ function renderActivity(events) {
 }
 
 function syncControls() {
-  if (!activeItem || !snapshot) return;
+  if (!activeItem || snapshot?.vin !== activeItem.vin) return;
   const current = state(activeItem);
   owner.value = current.owner;
   solved.checked = Boolean(current.solved);
@@ -178,8 +208,13 @@ async function refresh() {
 async function loadBoard() {
   try {
     const first = board.hidden;
-    snapshot = await api("/api/board");
+    const vin = chosenVin;
+    const next = await api(vin ? `/api/board?vin=${encodeURIComponent(vin)}` : "/api/board");
+    if (vin !== chosenVin) return;
+    snapshot = next;
+    byId("notice").textContent = "";
     if (first) {
+      setOptions(vinSelect, [["Selecciona un vehículo", ""]], snapshot.vehicles);
       setOptions(byId("filter-owner"), [["Todos", ""], ["Sin asignar", "unassigned"]], snapshot.owners);
       setOptions(owner, [["Sin asignar", ""]], snapshot.owners);
     }
@@ -202,17 +237,18 @@ async function loadBoard() {
 
 async function refreshActivity(item) {
   const events = await api(activityPath(item, "activity"));
-  if (detail.open && item === activeItem) renderActivity(events);
+  if (detail.open && item === activeItem) renderActivity(events, item.vin);
 }
 
 function openItem(item) {
-  activeItem = item;
+  if (!snapshot?.vin || snapshot.vin !== chosenVin) return;
+  activeItem = {...item, vin: snapshot.vin};
   activityKey = "";
   byId("history").replaceChildren();
   byId("detail-notice").textContent = "";
   byId("comment-form").reset();
   byId("photo-form").reset();
-  byId("detail-meta").textContent = `${item.category} · Excel, fila ${item.row}`;
+  byId("detail-meta").textContent = `${item.category} · VIN ${activeItem.vin} · Excel, fila ${item.row}`;
   byId("detail-title").textContent = `Punto ${item.id}`;
   byId("description").textContent = item.description;
   syncControls();
@@ -224,7 +260,10 @@ function openItem(item) {
   }
   byId("references").replaceChildren(...(photos.length ? photos : [element("p", "El Excel no incluye una foto para este punto.", "caption")]));
   detail.showModal();
-  refreshActivity(item).catch((error) => { byId("detail-notice").textContent = error.message; });
+  const opened = activeItem;
+  refreshActivity(opened).catch((error) => {
+    if (activeItem === opened) byId("detail-notice").textContent = error.message;
+  });
 }
 
 async function mutate(action, operation) {
@@ -276,6 +315,14 @@ byId("logout").addEventListener("click", async () => {
   } catch (error) {
     byId("notice").textContent = error.message;
   }
+});
+
+vinSelect.addEventListener("change", async () => {
+  const vin = vinSelect.value;
+  chosenVin = vin;
+  renderBoard();
+  await currentRead;
+  if (chosenVin === vin && !board.hidden) await refresh();
 });
 
 for (const filter of ["search", "filter-status", "filter-owner"]) {

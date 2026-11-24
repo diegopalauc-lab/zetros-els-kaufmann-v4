@@ -30,11 +30,27 @@
       </form>
     </section>
     <section id="board" hidden aria-label="Tablero de revisión">
-      <div class="overview">
-        <div><h2>Puntos de revisión</h2><p id="progress-label"></p></div>
-        <progress id="progress" aria-label="Avance total"></progress>
+      <div class="panel vehicle-selector">
+        <label for="vin">Seleccionar VIN</label>
+        <select id="vin"><option value="">Selecciona un vehículo</option></select>
       </div>
-      <div class="filters panel">
+      <div class="overview">
+        <div><h2>Puntos de revisión</h2></div>
+      </div>
+      <div class="progress-grid">
+        <section class="panel progress-card">
+          <h3>Avance del vehículo</h3>
+          <p class="progress-value" id="progress-label">Selecciona un VIN</p>
+          <progress id="progress" aria-label="Avance del vehículo" hidden></progress>
+        </section>
+        <section class="panel progress-card">
+          <h3>Avance general</h3>
+          <p class="progress-value" id="fleet-label"></p>
+          <progress id="fleet-progress" aria-label="Avance general"></progress>
+        </section>
+      </div>
+      <p id="vehicle-status" class="caption" role="status">Selecciona un VIN para ver sus puntos de revisión.</p>
+      <div class="filters panel" id="filters" hidden>
         <label>Buscar<input id="search" type="search" placeholder="Número, descripción o categoría"></label>
         <label>Estado<select id="filter-status"><option value="">Todos</option><option value="open">Pendientes</option><option value="done">Solucionados</option></select></label>
         <label>Responsable<select id="filter-owner"><option value="">Todos</option><option value="unassigned">Sin asignar</option></select></label>

@@ -1,7 +1,9 @@
 import items from "./items.json" with { type: "json" };
+import vehicles from "./vehicles.json" with { type: "json" };
 
 const owners = ["Pablo", "Miguel", "Carlos", "David", "Márquez", "Fausto", "Larisa", "Silvestre", "Adolfo", "Vicente"];
 const ids = new Set(items.map(({id}) => id));
+const vins = new Set(vehicles);
 const references = new Set(items.flatMap(({photos, categoryPhotos = []}) => [...photos, ...categoryPhotos]).map((name) => "/reference/" + name));
 const publicPaths = new Set(["/", "/app.js", "/style.css", "/logo-els.png", "/logo-kaufmann.png"]);
 const sessionSeconds = 7 * 24 * 3600;
@@ -184,8 +186,42 @@ async function asset(request, env) {
   return new Response(source.body, {status: source.status, headers});
 }
 
+function requireVin(vin) {
+  if (!vins.has(vin)) throw new RequestError(400, "Selecciona un VIN válido.");
+  return vin;
+}
+
+async function loadBoard(db, vin, author) {
+  if (vin !== null) requireVin(vin);
+  const total = db.prepare(`SELECT COUNT(*) AS solved FROM states
+    WHERE solved = 1 AND substr(item, 18, 1) = ':'
+      AND substr(item, 1, 17) IN (SELECT value FROM json_each(?))
+      AND substr(item, 19) IN (SELECT value FROM json_each(?))`)
+    .bind(JSON.stringify(vehicles), JSON.stringify([...ids]));
+  let individual = [];
+  let fleet;
+  if (vin) {
+    // Read both indicators from the same database snapshot.
+    const [selected, overall] = await db.batch([
+      db.prepare("SELECT substr(item, 19) AS item, owner, solved FROM states WHERE item >= ? AND item < ?")
+        .bind(`${vin}:`, `${vin};`),
+      total,
+    ]);
+    individual = selected.results;
+    fleet = overall.results[0];
+  } else {
+    fleet = await total.first();
+  }
+  const states = Object.fromEntries(individual.filter(({item}) => ids.has(item)).map((row) => [
+    row.item,
+    {...row, owner: owners.includes(row.owner) ? row.owner : ""},
+  ]));
+  return json({items, states, owners, vehicles, vin, fleetSolved: fleet.solved, user: author});
+}
+
 async function route(request, env) {
-  const {pathname} = new URL(request.url);
+  const {pathname, searchParams} = new URL(request.url);
+  const vin = searchParams.get("vin");
   const {method} = request;
 
   if (method === "GET" && publicPaths.has(pathname)) return asset(request, env);
@@ -208,23 +244,21 @@ async function route(request, env) {
     return json({ok: true}, 200, {"Set-Cookie": cookie("", 0)});
   }
   if (method === "GET" && pathname === "/api/board") {
-    const {results} = await db.prepare("SELECT item, owner, solved FROM states").all();
-    const states = Object.fromEntries(results.filter(({item}) => ids.has(item)).map((row) => [
-      row.item,
-      {...row, owner: owners.includes(row.owner) ? row.owner : ""},
-    ]));
-    return json({items, states, owners, user: author});
+    return loadBoard(db, vin, author);
   }
   if (method === "GET" && references.has(pathname)) return asset(request, env);
 
   const photo = /^\/photos\/([0-9]{1,15})$/.exec(pathname);
   if (method === "GET" && photo) {
-    const row = await db.prepare("SELECT photo, mime FROM activity WHERE id = ? AND kind = 'photo'").bind(Number(photo[1])).first();
+    const vehicle = requireVin(vin);
+    const row = await db.prepare("SELECT photo, mime FROM activity WHERE id = ? AND kind = 'photo' AND item >= ? AND item < ?")
+      .bind(Number(photo[1]), `${vehicle}:`, `${vehicle};`).first();
     if (row) return new Response(decode(row.photo), {headers: {...security, "Content-Type": row.mime}});
   }
   const endpoint = /^\/api\/([\d.]+)\/(activity|state|comment|photo)$/.exec(pathname);
   if (endpoint && ids.has(endpoint[1])) {
-    const [, item, action] = endpoint;
+    const [, id, action] = endpoint;
+    const item = `${requireVin(vin)}:${id}`;
     if (method === "GET" && action === "activity") {
       const {results} = await db.prepare("SELECT id, author, time, kind, body FROM activity WHERE item = ? ORDER BY id DESC")
         .bind(item).all();
